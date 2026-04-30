@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --color-holi-purple: #6D28D9;
+  --color-holi-purple-ink: #4C1D95;
+  --color-holi-saffron: #F2C21B;
+  --color-holi-blush: #F7BBD6;
+  --color-holi-mango: #FF9E39;
+  --color-holi-cream: #FFF7E6;
+  --color-holi-ink: #2A1B3D;
+  --color-holi-ink-soft: #7A6B8A;
+
+  --font-Fraunces: 'Fraunces', 'Times New Roman', serif;
+  --font-CaveatBrush: 'Caveat Brush', 'Permanent Marker', cursive;
+  --font-DMSans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root {
+  --holi-purple: #6D28D9;
+  --holi-purple-ink: #4C1D95;
+  --holi-saffron: #F2C21B;
+  --holi-blush: #F7BBD6;
+  --holi-mango: #FF9E39;
+  --holi-cream: #FFF7E6;
+  --holi-ink: #2A1B3D;
+  --holi-ink-soft: #7A6B8A;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-DMSans);
+  color: var(--holi-ink);
+  background: var(--holi-cream);
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes holiPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.3); }
+}
+
+.holi-pulse {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 999px;
+  background: var(--holi-purple);
+  margin-right: 4px;
+  vertical-align: middle;
+  animation: holiPulse 1.4s ease-in-out infinite;
+}
+
+/* Hide scrollbars on horizontally scrolling tab strip */
+.holi-no-scrollbar::-webkit-scrollbar { display: none; }
+.holi-no-scrollbar { scrollbar-width: none; }
