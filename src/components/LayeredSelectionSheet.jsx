@@ -1,56 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Splash } from '../elements/Splash';
-
-// Normalisierung übernommen aus kantine/src/components/LayeredSelectionDialog.jsx,
-// damit die Auswertung 1:1 mit Service/Kantine-POS übereinstimmt.
-const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+import { computeLayerDelta, normalizeLayers, toNumber } from '../utils/layerPricing';
 
 const formatEuro = (value) => `${toNumber(value).toFixed(2).replace('.', ',')} €`;
-
-const normalizeLayers = (rawLayers) => {
-  if (!Array.isArray(rawLayers)) return [];
-  return [...rawLayers]
-    .map((l) => ({
-      id: l.id,
-      name: l.name || '',
-      description: l.description || '',
-      position: l.position ?? 0,
-      minSelections: Number.isFinite(l.minSelections) ? l.minSelections : 0,
-      maxSelections: Number.isFinite(l.maxSelections) ? l.maxSelections : 1,
-      freeCount: Number.isFinite(l.freeCount) ? l.freeCount : 0,
-      options: (l.options || [])
-        .map((o) => ({
-          id: o.id,
-          name: o.name || '',
-          priceDelta: toNumber(o.priceDelta),
-          priceDeltaDiscounted: toNumber(o.priceDeltaDiscounted),
-          position: o.position ?? 0,
-          available: o.available !== false,
-          hint: o.hint || '',
-        }))
-        .sort((a, b) => a.position - b.position),
-    }))
-    .sort((a, b) => a.position - b.position);
-};
-
-// Free-Count zuerst, dann Aufpreis: gleiche Semantik wie im Backend
-// (validateAndPriceLayers → validateOrderItems).
-const computeLayerDelta = (layer, picks) => {
-  let delta = 0;
-  let used = 0;
-  for (const pick of picks) {
-    const opt = layer.options.find((o) => o.id === pick.optionId);
-    if (!opt) continue;
-    used += 1;
-    if (used <= (layer.freeCount || 0)) continue;
-    delta += opt.priceDelta;
-  }
-  return delta;
-};
 
 const StepDots = ({ steps, current }) => (
   <div className="flex items-center gap-1.5">

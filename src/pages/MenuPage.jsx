@@ -74,11 +74,13 @@ export default function MenuPage() {
       scroller.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    const el = document.getElementById(`cat-${tabId}`);
-    if (el) {
-      const top = el.offsetTop - 110;
-      scroller.scrollTo({ top, behavior: 'smooth' });
-    }
+    const anchorId = `cat-${tabId}`;
+    const el = document.getElementById(anchorId);
+    if (!el) return;
+    // Abstand des Ankers vom oberen Inhaltsrand des Scroll-Containers (nicht nur offsetTop).
+    const relativeTop =
+      el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    scroller.scrollTo({ top: Math.max(0, relativeTop - 110), behavior: 'smooth' });
   };
 
   if (isPending) {
@@ -104,7 +106,10 @@ export default function MenuPage() {
   }
 
   return (
-    <div className="relative flex flex-col min-h-screen" style={{ background: 'var(--holi-cream)' }}>
+    <div
+      className="relative flex flex-col h-[100dvh] overflow-hidden"
+      style={{ background: 'var(--holi-cream)' }}
+    >
       {/* Header */}
       <header className="relative px-5 pt-3.5 pb-2.5 overflow-hidden flex-shrink-0">
         <Splash color="purple" size={180} opacity={0.45} style={{ top: -60, left: -50 }} />
@@ -126,7 +131,7 @@ export default function MenuPage() {
       {/* Scrollable list */}
       <div
         ref={scrollerRef}
-        className="flex-1 overflow-y-auto px-5 pb-32 relative"
+        className="flex-1 min-h-0 overflow-y-auto px-5 pb-32 relative touch-pan-y"
       >
         {Object.keys(dishes).length === 0 && Object.keys(drinks).length === 0 && (
           <div className="text-center py-12" style={{ color: 'var(--holi-ink-soft)' }}>

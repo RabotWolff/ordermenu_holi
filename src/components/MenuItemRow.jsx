@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useCartStore } from '../stores/useCartStore';
+import { computeMinimumLayeredUnitPrice } from '../utils/layerPricing';
 import { AllergenChips } from './AllergenChips';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
@@ -17,6 +18,12 @@ export const MenuItemRow = ({ product, onAddWithLayers }) => {
     return Array.isArray(raw) ? raw : [];
   }, [product]);
   const hasLayers = layers.length > 0;
+
+  /** „ab“-Preis: Basis + günstigste erlaubte Pflichtwahl pro Layer (minSelections, freeCount). */
+  const displayUnitPrice = useMemo(() => {
+    if (!hasLayers) return Number(product?.price) || 0;
+    return computeMinimumLayeredUnitPrice(product, layers);
+  }, [hasLayers, product, layers]);
 
   // Allergen-Codes aus Ingredient-Beziehungen zusammenstellen.
   const allergenCodes = useMemo(() => {
@@ -89,7 +96,7 @@ export const MenuItemRow = ({ product, onAddWithLayers }) => {
               ab
             </span>
           )}
-          {formatEuro(product.price)}
+          {formatEuro(displayUnitPrice)}
         </span>
 
         {count > 0 ? (
