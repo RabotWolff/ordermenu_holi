@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { FileText } from 'lucide-react';
 import { usePickupStore } from '../stores/usePickupStore';
 import { useGetOrderStatus } from '../hooks/useGetOrderStatus';
+import { useDownloadInvoice } from '../hooks/useDownloadInvoice';
 import { Splash } from '../elements/Splash';
 import { SpeckCluster } from '../elements/SpeckCluster';
 import { HoliWordmark } from '../elements/HoliWordmark';
@@ -14,6 +16,7 @@ export default function StatusPage() {
   const clearActiveOrder = usePickupStore((s) => s.clearActiveOrder);
 
   const { data, error, isPending } = useGetOrderStatus(txId);
+  const { mutate: downloadInvoice, isPending: isDownloading, error: downloadError } = useDownloadInvoice();
 
   // Push-artige Banner-Anzeige bei Status-Wechsel.
   const [justChanged, setJustChanged] = useState(false);
@@ -36,6 +39,11 @@ export default function StatusPage() {
   const handleNewOrder = () => {
     clearActiveOrder();
     navigate('/', { replace: true });
+  };
+
+  const handleDownload = () => {
+    if (!txId) return;
+    downloadInvoice({ txId, receiptNumber: data?.receiptNumber });
   };
 
   const status = data?.status;
@@ -83,6 +91,7 @@ export default function StatusPage() {
             onClick={() => setJustChanged(false)}
             className="border-0 bg-transparent text-lg cursor-pointer p-1"
             style={{ color: 'rgba(255,255,255,0.6)' }}
+            aria-label="Banner schließen"
           >
             ×
           </button>
@@ -94,7 +103,7 @@ export default function StatusPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 pb-24 relative flex flex-col">
-        {/* Pickup name (huge) */}
+        {/* Pickup name */}
         <div className="text-center mt-2.5 relative">
           <div
             className="text-[10px] uppercase font-bold mb-1"
@@ -104,11 +113,7 @@ export default function StatusPage() {
           </div>
           <div
             className="font-CaveatBrush leading-none inline-block"
-            style={{
-              fontSize: 56,
-              color: 'var(--holi-purple)',
-              transform: 'rotate(-2deg)',
-            }}
+            style={{ fontSize: 56, color: 'var(--holi-purple)', transform: 'rotate(-2deg)' }}
           >
             {pickupName || '—'}
           </div>
@@ -137,10 +142,7 @@ export default function StatusPage() {
         {!error && status && <StatusTimeline status={status} />}
 
         {!error && status && statusIndex < 2 && (
-          <div
-            className="mt-3.5 text-center text-xs relative"
-            style={{ color: 'var(--holi-ink-soft)' }}
-          >
+          <div className="mt-3.5 text-center text-xs relative" style={{ color: 'var(--holi-ink-soft)' }}>
             Wir melden uns hier, sobald deine Bestellung fertig ist.
           </div>
         )}
@@ -153,7 +155,7 @@ export default function StatusPage() {
           </div>
         )}
 
-        {/* Items */}
+        {/* Items + PDF-Button */}
         {items.length > 0 && (
           <div
             className="mt-4 p-3.5 rounded-2xl relative"
@@ -180,14 +182,33 @@ export default function StatusPage() {
                 </span>
               </div>
             ))}
+
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              aria-label="Quittung als PDF speichern"
+              className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[12px] font-semibold cursor-pointer"
+              style={{
+                background: 'rgba(109,40,217,0.08)',
+                color: 'var(--holi-purple-ink)',
+                border: '1px dashed rgba(109,40,217,0.35)',
+                opacity: isDownloading ? 0.6 : 1,
+              }}
+            >
+              <FileText size={15} strokeWidth={2} aria-hidden="true" />
+              {isDownloading ? 'Wird vorbereitet…' : 'Quittung als PDF speichern'}
+            </button>
+            {downloadError && (
+              <div className="mt-2 text-[11px] text-red-600 text-center">
+                {downloadError.message}
+              </div>
+            )}
           </div>
         )}
 
         {isPending && !data && (
-          <div
-            className="mt-6 text-center text-sm"
-            style={{ color: 'var(--holi-ink-soft)' }}
-          >
+          <div className="mt-6 text-center text-sm" style={{ color: 'var(--holi-ink-soft)' }}>
             Status wird geladen…
           </div>
         )}

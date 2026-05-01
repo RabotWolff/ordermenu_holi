@@ -27,6 +27,7 @@ export const SpeckCluster = ({ color = 'saffron', count = 14, size = 120, classN
       height={size}
       viewBox="0 0 100 100"
       aria-hidden="true"
+      data-decoration="speck"
       className={`pointer-events-none absolute ${className}`}
       style={style}
     >

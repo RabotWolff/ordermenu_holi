@@ -11,6 +11,7 @@ import StatusPage from './pages/StatusPage';
 import AGBPage from './pages/AGBPage';
 import DatenschutzPage from './pages/DatenschutzPage';
 import ImpressumPage from './pages/ImpressumPage';
+import { ReadableModeToggle } from './components/ReadableModeToggle';
 
 import './App.css';
 
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/datenschutz" element={<DatenschutzPage />} />
           <Route path="/impressum" element={<ImpressumPage />} />
         </Routes>
+        <ReadableModeToggle />
       </BrowserRouter>
     </QueryClientProvider>
   );

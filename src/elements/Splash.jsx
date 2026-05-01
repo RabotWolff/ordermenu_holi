@@ -7,7 +7,7 @@ const SPLASH_COLORS = {
   mango: 'var(--holi-mango)',
 };
 
-// Dekoratives, weich gerendertes Color-Splash-Blob – pure SVG, keine Assets.
+// Dekoratives, weich gerendertes Color-Splash-Blob
 export const Splash = ({ color = 'purple', size = 220, opacity = 0.5, className = '', style = {} }) => {
   const fill = SPLASH_COLORS[color] || color;
   const id = useId();
@@ -17,6 +17,7 @@ export const Splash = ({ color = 'purple', size = 220, opacity = 0.5, className 
       height={size}
       viewBox="0 0 200 200"
       aria-hidden="true"
+      data-decoration="splash"
       className={`pointer-events-none absolute ${className}`}
       style={{ filter: 'blur(14px)', ...style }}
     >

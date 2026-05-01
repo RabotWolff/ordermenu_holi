@@ -11,6 +11,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Caveat+Brush&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <script>
+      // Lesemodus synchron vor dem ersten Paint anwenden, damit kein Flash entsteht.
+      try {
+        if (localStorage.getItem('holy.readableMode') === '1') {
+          document.documentElement.dataset.mode = 'readable';
+        }
+      } catch (_) { /* ignore */ }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

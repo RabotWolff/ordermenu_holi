@@ -23,6 +23,11 @@ const buildLayerHash = (selectedLayers) => {
 export const useCartStore = create((set, get) => ({
   lines: [],
 
+  // Konsumart: null = noch nicht gewählt. true = Außer Haus, false = Vor Ort.
+  // Wird zwingend vor dem Bezahlen gesetzt (CartPage / CheckoutPage).
+  isTakeaway: null,
+  setIsTakeaway: (value) => set({ isTakeaway: value === true ? true : value === false ? false : null }),
+
   addLine: ({ product, selectedLayers, layerNames, totalDelta }) => {
     const layerHash = buildLayerHash(selectedLayers);
     const lineId = `${product.id}::${layerHash}`;
@@ -103,5 +108,5 @@ export const useCartStore = create((set, get) => ({
 
   itemCount: () => get().lines.reduce((s, l) => s + l.qty, 0),
 
-  clear: () => set({ lines: [] }),
+  clear: () => set({ lines: [], isTakeaway: null }),
 }));

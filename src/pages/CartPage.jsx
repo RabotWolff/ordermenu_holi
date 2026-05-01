@@ -40,7 +40,7 @@ export default function CartPage() {
             Warenkorb
           </div>
           <div className="text-xs mt-0.5" style={{ color: 'var(--holi-ink-soft)' }}>
-            {itemCount} Artikel · zur Mitnahme
+            {itemCount} Artikel
           </div>
         </div>
       </header>

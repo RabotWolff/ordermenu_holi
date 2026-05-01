@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useGetMenus } from '../hooks/useGetMenus';
 import { useCartStore } from '../stores/useCartStore';
+import { usePickupStore } from '../stores/usePickupStore';
 import { Splash } from '../elements/Splash';
 import { SpeckCluster } from '../elements/SpeckCluster';
 import { HoliWordmark } from '../elements/HoliWordmark';
@@ -15,7 +16,13 @@ const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 // HOLY ist als RESTAURANT_MENU konfiguriert: ein einziges, statisches Menü
 // (kein Tagesturnus). Wir fragen daher /api/getMenus ohne Datumsfilter ab
 // und nehmen das erste – und einzige – Menü.
+const formatEuroShort = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
+
 export default function MenuPage() {
+  const navigate = useNavigate();
+  const history = usePickupStore((s) => s.history);
+  const setActiveOrder = usePickupStore((s) => s.setActiveOrder);
+
   const {
     data: menusData,
     isPending,
@@ -53,6 +60,11 @@ export default function MenuPage() {
 
   const cartCount = useCartStore((s) => s.itemCount());
   const cartTotal = useCartStore((s) => s.total());
+
+  const reopenOrder = (entry) => {
+    setActiveOrder({ txId: entry.txId, pickupName: entry.pickupName });
+    navigate('/status');
+  };
 
   const scrollToCategory = (tabId) => {
     setActiveTab(tabId);
@@ -163,6 +175,54 @@ export default function MenuPage() {
             ))}
           </div>
         ))}
+
+        {history.length > 0 && (
+          <div className="mt-8 mb-2">
+            <div
+              className="text-[10px] uppercase font-bold mb-2.5"
+              style={{ letterSpacing: '0.18em', color: 'var(--holi-ink-soft)' }}
+            >
+              Meine heutigen Bestellungen
+            </div>
+            {history.map((entry) => (
+              <button
+                key={entry.txId}
+                type="button"
+                onClick={() => reopenOrder(entry)}
+                className="w-full text-left rounded-2xl px-3.5 py-3 mb-2 flex items-center gap-3 cursor-pointer"
+                style={{
+                  background: 'rgba(109,40,217,0.06)',
+                  border: '1px solid rgba(109,40,217,0.14)',
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="font-CaveatBrush text-[20px] leading-none"
+                    style={{ color: 'var(--holi-purple)' }}
+                  >
+                    {entry.pickupName}
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--holi-ink-soft)' }}>
+                    {new Date(entry.orderedAt).toLocaleTimeString('de-DE', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}{' '}
+                    Uhr
+                    {entry.total != null
+                      ? ` · ${formatEuroShort(entry.total)}`
+                      : ''}
+                  </div>
+                </div>
+                <span
+                  className="text-[11px] font-semibold flex-shrink-0"
+                  style={{ color: 'var(--holi-purple-ink)' }}
+                >
+                  Status →
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <AllergenLegend />
       </div>

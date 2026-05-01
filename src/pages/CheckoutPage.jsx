@@ -10,6 +10,7 @@ import { useSubmitOrder } from '../hooks/useSubmitOrder';
 import { Splash } from '../elements/Splash';
 import { SpeckCluster } from '../elements/SpeckCluster';
 import { ConsentCheckbox } from '../components/ConsentCheckbox';
+import { ConsumptionToggle } from '../components/ConsumptionToggle';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 
@@ -150,6 +151,7 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
   const elements = useElements();
 
   const lines = useCartStore((s) => s.lines);
+  const isTakeaway = useCartStore((s) => s.isTakeaway);
 
   const pickupName = usePickupStore((s) => s.pickupName);
   const setPickupName = usePickupStore((s) => s.setPickupName);
@@ -180,7 +182,7 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
 
   const { mutateAsync: submitOrder } = useSubmitOrder();
 
-  const canPay = stripe && elements && agbOk && datenschutzOk && !submitting && pickupName;
+  const canPay = stripe && elements && agbOk && datenschutzOk && !submitting && pickupName && typeof isTakeaway === 'boolean';
 
   const handlePay = async () => {
     if (!canPay) return;
@@ -198,12 +200,14 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
         paymentAmount: { tip: 0, total },
         items: orderItemsForBackend,
         pickupName,
+        isTakeaway,
       });
 
       setActiveOrder({
         orderId: orderResp.id,
         txId: orderResp.txId,
         pickupName,
+        total,
       });
 
       // 2) Stripe-Confirm. Redirect zur Payment-Complete-Page.
@@ -260,6 +264,8 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 pt-3 pb-44 relative">
+        <ConsumptionToggle />
+
         {/* Pickup name card */}
         <div
           className="rounded-3xl mb-3.5 px-5 pt-4 pb-4 relative overflow-hidden"

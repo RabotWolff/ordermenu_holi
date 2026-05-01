@@ -8,7 +8,7 @@
   --color-holi-mango: #FF9E39;
   --color-holi-cream: #FFF7E6;
   --color-holi-ink: #2A1B3D;
-  --color-holi-ink-soft: #7A6B8A;
+  --color-holi-ink-soft: #5E4E70;
 
   --font-Fraunces: 'Fraunces', 'Times New Roman', serif;
   --font-CaveatBrush: 'Caveat Brush', 'Permanent Marker', cursive;
@@ -23,7 +23,40 @@
   --holi-mango: #FF9E39;
   --holi-cream: #FFF7E6;
   --holi-ink: #2A1B3D;
-  --holi-ink-soft: #7A6B8A;
+  --holi-ink-soft: #5E4E70;
+}
+
+/* Sichtbarer Fokusring für Tastaturnutzung. */
+:focus-visible {
+  outline: 3px solid var(--holi-purple);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* OS-Setting: weniger Bewegung. Animationen aus, Splash + Specks bleiben. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── Lesemodus ────────────────────────────────────────────────────────
+   Aktiv wenn <html data-mode="readable">. Gesetzt vom ReadableModeToggle
+   (persistiert in localStorage; siehe Inline-Script in index.html für
+   Apply-vor-Mount, damit kein Flash auftritt). */
+[data-mode="readable"] [data-decoration] { display: none !important; }
+[data-mode="readable"] *, [data-mode="readable"] *::before, [data-mode="readable"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+[data-mode="readable"] {
+  --holi-ink-soft: #3A2D4A;
+}
+[data-mode="readable"] :focus-visible {
+  outline-width: 4px;
+  outline-offset: 3px;
 }
 
 html, body {
