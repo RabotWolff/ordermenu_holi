@@ -1,4 +1,7 @@
+import { useMemo } from 'react';
 import { useCartStore } from '../stores/useCartStore';
+import { FoodLabelChips } from './FoodLabelChips';
+import { effectiveLabels } from '../utils/foodLabels';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 
@@ -7,6 +10,11 @@ export const CartLine = ({ line }) => {
   const decrementLine = useCartStore((s) => s.decrementLine);
 
   const displayName = line.product.nameAdvertising || line.product.name;
+  const labels = useMemo(
+    () => effectiveLabels(line.product, line.selectedLayers),
+    [line.product, line.selectedLayers]
+  );
+  const hasLabels = labels.allergens.length > 0 || labels.additives.length > 0;
 
   return (
     <div
@@ -31,6 +39,11 @@ export const CartLine = ({ line }) => {
               style={{ color: 'var(--holi-ink-soft)' }}
             >
               {line.layerNames.join(' · ')}
+            </div>
+          )}
+          {hasLabels && (
+            <div className="mt-1.5">
+              <FoodLabelChips allergens={labels.allergens} additives={labels.additives} />
             </div>
           )}
         </div>

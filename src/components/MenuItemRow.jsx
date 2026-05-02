@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useCartStore } from '../stores/useCartStore';
 import { computeMinimumLayeredUnitPrice } from '../utils/layerPricing';
-import { AllergenChips } from './AllergenChips';
+import { FoodLabelChips } from './FoodLabelChips';
+import { baseAllergens, baseAdditives } from '../utils/foodLabels';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 
@@ -25,19 +26,13 @@ export const MenuItemRow = ({ product, onAddWithLayers }) => {
     return computeMinimumLayeredUnitPrice(product, layers);
   }, [hasLayers, product, layers]);
 
-  // Allergen-Codes aus Ingredient-Beziehungen zusammenstellen.
-  const allergenCodes = useMemo(() => {
-    const set = new Set();
-    const ingredients = product?.product?.ingredientLines || product?.ingredientLines || [];
-    for (const line of ingredients) {
-      const ing = line?.ingredient;
-      if (!ing?.allergens) continue;
-      for (const a of ing.allergens) {
-        if (a.code) set.add(a.code);
-      }
-    }
-    return [...set];
-  }, [product]);
+  // Backend liefert auf jedem MenuProduct ein bereits aggregiertes
+  // `allergens` + `additives` (aus den direkt verknüpften Ingredients).
+  // Layer-/Beilagen-bedingte Labels werden hier bewusst NICHT eingerechnet:
+  // Die ändern sich pro Auswahl und werden im LayerSheet pro Option gezeigt
+  // bzw. auf der CartLine als effektive Menge.
+  const allergens = useMemo(() => baseAllergens(product), [product]);
+  const additives = useMemo(() => baseAdditives(product), [product]);
 
   const description = product.description || product.descriptionLong || '';
   const displayName = product.nameAdvertising || product.name;
@@ -80,7 +75,9 @@ export const MenuItemRow = ({ product, onAddWithLayers }) => {
             {description}
           </p>
         )}
-        <AllergenChips codes={allergenCodes} />
+        <div className="mt-1">
+          <FoodLabelChips allergens={allergens} additives={additives} />
+        </div>
       </div>
 
       <div className="flex flex-col items-end gap-1.5 pt-px">

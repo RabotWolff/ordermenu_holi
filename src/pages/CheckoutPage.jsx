@@ -438,7 +438,7 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
             }}
           >
             <span>
-              {submitting ? 'Wird verarbeitet…' : `Mit Stripe bezahlen · ${formatEuro(total)}`}
+              {submitting ? 'Wird verarbeitet…' : `Jetzt bezahlen · ${formatEuro(total)}`}
             </span>
           </button>
           <p

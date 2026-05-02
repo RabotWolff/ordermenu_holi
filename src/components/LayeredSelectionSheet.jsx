@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { Splash } from '../elements/Splash';
 import { computeLayerDelta, normalizeLayers, toNumber } from '../utils/layerPricing';
+import { FoodLabelChips } from './FoodLabelChips';
+import { effectiveLabels, labelsForOption } from '../utils/foodLabels';
 
 const formatEuro = (value) => `${toNumber(value).toFixed(2).replace('.', ',')} €`;
 
@@ -33,6 +35,8 @@ const SummaryChip = ({ name }) => (
 
 const OptionRow = ({ opt, count, isSingle, addDisabled, onAdd, onRemove }) => {
   const isSelected = count > 0;
+  const { allergens, additives } = labelsForOption(opt);
+  const hasLabels = allergens.length > 0 || additives.length > 0;
   return (
     <div
       className="rounded-2xl mb-2 overflow-hidden transition-all"
@@ -96,6 +100,20 @@ const OptionRow = ({ opt, count, isSingle, addDisabled, onAdd, onRemove }) => {
               style={{ color: isSelected ? 'rgba(255,255,255,0.85)' : 'var(--holi-ink-soft)' }}
             >
               {opt.hint}
+            </div>
+          )}
+          {hasLabels && (
+            <div
+              className="mt-1"
+              style={{
+                // In selected (purple) state we tint the chip backgrounds via
+                // mix-blend so the amber/blue stays readable on dark purple.
+                filter: isSelected ? 'brightness(1.15) saturate(1.2)' : 'none',
+              }}
+              onClick={(e) => e.stopPropagation()}
+              role="presentation"
+            >
+              <FoodLabelChips allergens={allergens} additives={additives} />
             </div>
           )}
         </button>
@@ -164,9 +182,13 @@ export const LayeredSelectionSheet = ({ open, onOpenChange, product, layers: raw
   let totalDelta = 0;
   const layerNames = [];
   const completedSummary = [];
+  const selectedLayersSnapshot = [];
   for (const layer of layers) {
     const lpicks = selections[layer.id] || [];
     totalDelta += computeLayerDelta(layer, lpicks);
+    if (lpicks.length > 0) {
+      selectedLayersSnapshot.push({ layerId: layer.id, picks: lpicks });
+    }
     for (const p of lpicks) {
       const opt = layer.options.find((o) => o.id === p.optionId);
       if (opt) {
@@ -176,6 +198,8 @@ export const LayeredSelectionSheet = ({ open, onOpenChange, product, layers: raw
     }
   }
   const liveTotal = Number(product.price || 0) + totalDelta;
+  const liveLabels = effectiveLabels(product, selectedLayersSnapshot);
+  const hasLiveLabels = liveLabels.allergens.length > 0 || liveLabels.additives.length > 0;
 
   const handleNext = () => {
     if (!canProceed) return;
@@ -282,7 +306,7 @@ export const LayeredSelectionSheet = ({ open, onOpenChange, product, layers: raw
             </div>
           </div>
 
-          {completedSummary.length > 0 && (
+          {(completedSummary.length > 0 || hasLiveLabels) && (
             <div
               className="px-5 py-2.5 flex-shrink-0 relative"
               style={{
@@ -291,17 +315,35 @@ export const LayeredSelectionSheet = ({ open, onOpenChange, product, layers: raw
                 borderBottom: '1px solid rgba(109,40,217,0.1)',
               }}
             >
-              <div
-                className="text-[9px] font-bold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--holi-ink-soft)' }}
-              >
-                Deine Auswahl
-              </div>
-              <div>
-                {completedSummary.map((s) => (
-                  <SummaryChip key={s.key} name={s.name} />
-                ))}
-              </div>
+              {completedSummary.length > 0 && (
+                <>
+                  <div
+                    className="text-[9px] font-bold uppercase tracking-widest mb-1.5"
+                    style={{ color: 'var(--holi-ink-soft)' }}
+                  >
+                    Deine Auswahl
+                  </div>
+                  <div>
+                    {completedSummary.map((s) => (
+                      <SummaryChip key={s.key} name={s.name} />
+                    ))}
+                  </div>
+                </>
+              )}
+              {hasLiveLabels && (
+                <div className={completedSummary.length > 0 ? 'mt-2' : ''}>
+                  <div
+                    className="text-[9px] font-bold uppercase tracking-widest mb-1"
+                    style={{ color: 'var(--holi-ink-soft)' }}
+                  >
+                    Allergene & Zusatzstoffe (deine Wahl)
+                  </div>
+                  <FoodLabelChips
+                    allergens={liveLabels.allergens}
+                    additives={liveLabels.additives}
+                  />
+                </div>
+              )}
             </div>
           )}
 

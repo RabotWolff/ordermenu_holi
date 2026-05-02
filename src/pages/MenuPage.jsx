@@ -9,7 +9,8 @@ import { HoliWordmark } from '../elements/HoliWordmark';
 import { MenuTabs } from '../components/MenuTabs';
 import { MenuItemRow } from '../components/MenuItemRow';
 import { LayeredSelectionSheet } from '../components/LayeredSelectionSheet';
-import { AllergenLegend } from '../components/AllergenChips';
+import { FoodLabelLegend } from '../components/FoodLabelChips';
+import { allPossibleLabelsForProducts } from '../utils/foodLabels';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 
@@ -33,6 +34,8 @@ export default function MenuPage() {
     if (!menusData || !Array.isArray(menusData) || menusData.length === 0) return [];
     return menusData[0].products || [];
   }, [menusData]);
+
+  const menuLabels = useMemo(() => allPossibleLabelsForProducts(products), [products]);
 
   const { dishes, drinks } = useMemo(() => {
     const dishMap = {};
@@ -112,7 +115,6 @@ export default function MenuPage() {
     >
       {/* Header */}
       <header className="relative px-5 pt-3.5 pb-2.5 overflow-hidden flex-shrink-0">
-        <Splash color="purple" size={180} opacity={0.45} style={{ top: -60, left: -50 }} />
         <Splash color="saffron" size={140} opacity={0.45} style={{ top: -40, right: -40 }} />
         <SpeckCluster color="mango" count={18} size={90} style={{ top: 10, right: 80 }} />
         <div className="relative flex items-center justify-between">
@@ -160,7 +162,7 @@ export default function MenuPage() {
 
         {Object.keys(drinks).length > 0 && (
           <div className="relative mt-6">
-            <Splash color="blush" size={160} opacity={0.4} style={{ top: 0, right: -60 }} />
+            <Splash color="blush" size={160} opacity={0.4} style={{ top:0, right: -60 }} />
             <Splash color="mango" size={120} opacity={0.4} style={{ top: 30, left: -50 }} />
             <SectionHeader title="Getränke" sub="heiß & kalt" />
           </div>
@@ -229,7 +231,10 @@ export default function MenuPage() {
           </div>
         )}
 
-        <AllergenLegend />
+        <FoodLabelLegend
+          allergens={menuLabels.allergens}
+          additives={menuLabels.additives}
+        />
       </div>
 
       {/* Floating cart bar */}
