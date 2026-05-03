@@ -613,7 +613,14 @@ const CheckoutFormSumup = ({ intentData, orderItemsForBackend, total }) => {
               await ensureOrderSubmitted();
             } else if (type === 'success') {
               const ok = await ensureOrderSubmitted();
-              if (ok) navigate('/payment-complete');
+              if (ok) {
+                // SumUp-Widget hat den Erfolg bereits bestätigt – die
+                // Stripe-Zwischenseite /payment-complete würde mit dem
+                // SumUp-Redirect (kein client_secret in der URL) hängen
+                // bleiben. Direkt zum Status-Screen.
+                useCartStore.getState().clear();
+                navigate('/status', { replace: true });
+              }
             } else if (type === 'error' || type === 'fail') {
               state.setErrorMessage(body?.message || 'Bezahlung fehlgeschlagen.');
               orderSubmittedRef.current = false;
