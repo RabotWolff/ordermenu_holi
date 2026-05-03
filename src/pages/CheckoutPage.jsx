@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
@@ -14,6 +14,8 @@ import { ConsumptionToggle } from '../components/ConsumptionToggle';
 
 const formatEuro = (v) => `${Number(v).toFixed(2).replace('.', ',')} €`;
 
+const SUMUP_WIDGET_SRC = 'https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js';
+
 const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
   : null;
@@ -21,6 +23,13 @@ const stripePromise = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
 // Holy Checkout: PaymentIntent vorab anfordern (für PaymentElement-Mount),
 // dann beim Bezahlen-Klick zuerst createOrder (Backend legt Order an,
 // status=NEW), dann stripe.confirmPayment → Redirect → /payment-complete.
+//
+// SumUp-Variante: Backend liefert den Checkout (id wird als
+// paymentIntentId verwendet). Im Frontend wird das SumUp-Card-Widget
+// gemountet (Karteneingabe in iframe, kein PAN-Touchpoint bei uns).
+// onResponse('sent') legt die Order an, onResponse('success') leitet
+// auf /payment-complete weiter. Der Webhook holt anschließend den
+// Checkout per API nach und promotet die Order auf CONFIRMED.
 export default function CheckoutPage() {
   const lines = useCartStore((s) => s.lines);
   const total = useCartStore((s) => s.total());
@@ -51,15 +60,6 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!stripePromise) {
-    return (
-      <FallbackError
-        title="Stripe nicht konfiguriert"
-        message="VITE_STRIPE_PUBLISHABLE_KEY fehlt im .env der Holy-App."
-      />
-    );
-  }
-
   if (intentError) {
     return (
       <FallbackError
@@ -74,6 +74,27 @@ export default function CheckoutPage() {
       <div className="flex items-center justify-center h-screen" style={{ background: 'var(--holi-cream)' }}>
         <span style={{ color: 'var(--holi-ink-soft)' }}>Zahlung wird vorbereitet…</span>
       </div>
+    );
+  }
+
+  const provider = intentData.provider || 'STRIPE';
+
+  if (provider === 'SUMUP') {
+    return (
+      <CheckoutFormSumup
+        intentData={intentData}
+        orderItemsForBackend={orderItemsForBackend}
+        total={total}
+      />
+    );
+  }
+
+  if (!stripePromise) {
+    return (
+      <FallbackError
+        title="Stripe nicht konfiguriert"
+        message="VITE_STRIPE_PUBLISHABLE_KEY fehlt im .env der Holy-App."
+      />
     );
   }
 
@@ -93,7 +114,7 @@ export default function CheckoutPage() {
 
   return (
     <Elements stripe={stripePromise} options={options}>
-      <CheckoutForm
+      <CheckoutFormStripe
         intentData={intentData}
         orderItemsForBackend={orderItemsForBackend}
         total={total}
@@ -145,23 +166,18 @@ const buildOrderItems = (lines) =>
     };
   });
 
-const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
-  const navigate = useNavigate();
-  const stripe = useStripe();
-  const elements = useElements();
-
+// Hook für die UI-Felder, die beide Provider teilen.
+function useCheckoutLayoutState() {
   const lines = useCartStore((s) => s.lines);
   const isTakeaway = useCartStore((s) => s.isTakeaway);
-
   const pickupName = usePickupStore((s) => s.pickupName);
   const setPickupName = usePickupStore((s) => s.setPickupName);
   const setActiveOrder = usePickupStore((s) => s.setActiveOrder);
 
   const { data: alterEgoData, refetch: refetchAlterEgo } = useGetRandomAlterEgo({
-    enabled: !pickupName, // nur abrufen, wenn noch keiner gesetzt ist
+    enabled: !pickupName,
   });
 
-  // Ersten Pickup-Namen einsetzen, wenn noch keiner persistiert ist.
   useEffect(() => {
     if (!pickupName && alterEgoData) {
       const name = formatAlterEgo(alterEgoData);
@@ -180,52 +196,38 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const { mutateAsync: submitOrder } = useSubmitOrder();
-
-  const canPay = stripe && elements && agbOk && datenschutzOk && !submitting && pickupName && typeof isTakeaway === 'boolean';
-
-  const handlePay = async () => {
-    if (!canPay) return;
-    setSubmitting(true);
-    setErrorMessage('');
-
-    try {
-      // 1) Order in DB anlegen (status=NEW). Stripe-Webhook promotet später auf CONFIRMED.
-      // Response liefert { success, id, txId } – txId ist die Capability
-      // für den späteren Status-Lookup auf /api/holy/orderStatus/:txId.
-      const orderResp = await submitOrder({
-        location: 'HOLY',
-        paymentIntentId: intentData.paymentIntentId,
-        paymentMethod: 'WEB',
-        paymentAmount: { tip: 0, total },
-        items: orderItemsForBackend,
-        pickupName,
-        isTakeaway,
-      });
-
-      setActiveOrder({
-        orderId: orderResp.id,
-        txId: orderResp.txId,
-        pickupName,
-        total,
-      });
-
-      // 2) Stripe-Confirm. Redirect zur Payment-Complete-Page.
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/payment-complete`,
-        },
-      });
-      if (error) {
-        setErrorMessage(error.message || 'Bezahlung fehlgeschlagen.');
-      }
-    } catch (err) {
-      setErrorMessage(err.message || 'Bestellung konnte nicht angelegt werden.');
-    } finally {
-      setSubmitting(false);
-    }
+  return {
+    lines,
+    isTakeaway,
+    pickupName,
+    setPickupName,
+    setActiveOrder,
+    regenerateName,
+    agbOk, setAgbOk,
+    datenschutzOk, setDatenschutzOk,
+    submitting, setSubmitting,
+    errorMessage, setErrorMessage,
   };
+}
+
+// Layout-Shell, identisch für Stripe und SumUp. Nur das Karten-Eingabe-
+// Element und der Pay-Button werden vom jeweiligen Provider gestellt.
+const CheckoutLayout = ({
+  state,
+  cardArea,
+  payButton,
+  total,
+  providerNote,
+}) => {
+  const navigate = useNavigate();
+  const {
+    lines,
+    pickupName,
+    regenerateName,
+    agbOk, setAgbOk,
+    datenschutzOk, setDatenschutzOk,
+    errorMessage,
+  } = state;
 
   return (
     <div
@@ -370,12 +372,12 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
           </div>
         </div>
 
-        {/* Stripe PaymentElement */}
+        {/* Card input area – provider-spezifisch */}
         <div
           className="rounded-2xl p-3.5 mb-3.5"
           style={{ background: 'white', border: '1px solid rgba(109,40,217,0.1)' }}
         >
-          <PaymentElement />
+          {cardArea}
         </div>
 
         {/* Consent */}
@@ -423,32 +425,245 @@ const CheckoutForm = ({ intentData, orderItemsForBackend, total }) => {
         )}
       </div>
 
-      {/* Pay button */}
+      {/* Pay button slot – provider-spezifisch */}
       <div className="fixed left-0 right-0 bottom-0 px-3.5 pb-4 z-20 pointer-events-none">
         <div className="max-w-[420px] mx-auto pointer-events-auto">
-          <button
-            type="button"
-            onClick={handlePay}
-            disabled={!canPay}
-            className="w-full border-0 text-white px-4 py-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm font-bold"
-            style={{
-              background: canPay ? 'var(--holi-purple)' : 'rgba(109,40,217,0.3)',
-              cursor: canPay ? 'pointer' : 'not-allowed',
-              boxShadow: canPay ? '0 8px 24px rgba(109,40,217,0.4)' : 'none',
-            }}
-          >
-            <span>
-              {submitting ? 'Wird verarbeitet…' : `Jetzt bezahlen · ${formatEuro(total)}`}
-            </span>
-          </button>
+          {payButton}
           <p
             className="text-[10px] text-center mt-2"
             style={{ color: 'var(--holi-ink-soft)' }}
           >
-            🔒 Sichere Zahlung über Stripe — Karte, Apple Pay, Google Pay
+            🔒 {providerNote}
           </p>
         </div>
       </div>
     </div>
+  );
+};
+
+// ----------------------------------------------------------------- Stripe
+
+const CheckoutFormStripe = ({ intentData, orderItemsForBackend, total }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const state = useCheckoutLayoutState();
+  const { mutateAsync: submitOrder } = useSubmitOrder();
+
+  const canPay =
+    stripe && elements && state.agbOk && state.datenschutzOk && !state.submitting &&
+    state.pickupName && typeof state.isTakeaway === 'boolean';
+
+  const handlePay = async () => {
+    if (!canPay) return;
+    state.setSubmitting(true);
+    state.setErrorMessage('');
+
+    try {
+      const orderResp = await submitOrder({
+        location: 'HOLY',
+        paymentIntentId: intentData.paymentIntentId,
+        paymentProvider: 'STRIPE',
+        paymentMethod: 'WEB',
+        paymentAmount: { tip: 0, total },
+        items: orderItemsForBackend,
+        pickupName: state.pickupName,
+        isTakeaway: state.isTakeaway,
+      });
+
+      state.setActiveOrder({
+        orderId: orderResp.id,
+        txId: orderResp.txId,
+        pickupName: state.pickupName,
+        total,
+      });
+
+      const { error } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/payment-complete`,
+        },
+      });
+      if (error) {
+        state.setErrorMessage(error.message || 'Bezahlung fehlgeschlagen.');
+      }
+    } catch (err) {
+      state.setErrorMessage(err.message || 'Bestellung konnte nicht angelegt werden.');
+    } finally {
+      state.setSubmitting(false);
+    }
+  };
+
+  const payButton = (
+    <button
+      type="button"
+      onClick={handlePay}
+      disabled={!canPay}
+      className="w-full border-0 text-white px-4 py-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm font-bold"
+      style={{
+        background: canPay ? 'var(--holi-purple)' : 'rgba(109,40,217,0.3)',
+        cursor: canPay ? 'pointer' : 'not-allowed',
+        boxShadow: canPay ? '0 8px 24px rgba(109,40,217,0.4)' : 'none',
+      }}
+    >
+      <span>
+        {state.submitting ? 'Wird verarbeitet…' : `Jetzt bezahlen · ${formatEuro(total)}`}
+      </span>
+    </button>
+  );
+
+  return (
+    <CheckoutLayout
+      state={state}
+      cardArea={<PaymentElement />}
+      payButton={payButton}
+      total={total}
+      providerNote="Sichere Zahlung über Stripe — Karte, Apple Pay, Google Pay"
+    />
+  );
+};
+
+// ------------------------------------------------------------------ SumUp
+
+// Lädt das SumUp Card-Widget einmalig in window. Mehrfacher Mount benutzt
+// das schon geladene Script.
+let sumupScriptPromise = null;
+function loadSumupScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (window.SumUpCard) return Promise.resolve(window.SumUpCard);
+  if (sumupScriptPromise) return sumupScriptPromise;
+
+  sumupScriptPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = SUMUP_WIDGET_SRC;
+    s.async = true;
+    s.onload = () => resolve(window.SumUpCard);
+    s.onerror = () => {
+      sumupScriptPromise = null;
+      reject(new Error('SumUp Widget konnte nicht geladen werden'));
+    };
+    document.head.appendChild(s);
+  });
+  return sumupScriptPromise;
+}
+
+const CheckoutFormSumup = ({ intentData, orderItemsForBackend, total }) => {
+  const navigate = useNavigate();
+  const state = useCheckoutLayoutState();
+  const { mutateAsync: submitOrder } = useSubmitOrder();
+  const cardContainerRef = useRef(null);
+  const widgetMountedRef = useRef(false);
+  // Damit wir submitOrder nur einmal pro Checkout schicken, auch wenn der
+  // Nutzer mehrfach versucht zu zahlen.
+  const orderSubmittedRef = useRef(false);
+
+  const checkoutId = intentData.paymentIntentId; // = SumUp checkout.id
+
+  const canMountWidget =
+    state.agbOk && state.datenschutzOk && state.pickupName &&
+    typeof state.isTakeaway === 'boolean';
+
+  // Order in DB anlegen, sobald der Nutzer alle Bedingungen erfüllt hat
+  // und das Widget gleich gemountet wird. Damit existiert die Order
+  // bevor der Webhook eintrifft – wenn er trotzdem zuerst feuert,
+  // bringt SumUp's Webhook-Retry den Treffer beim nächsten Versuch.
+  const ensureOrderSubmitted = async () => {
+    if (orderSubmittedRef.current) return true;
+    orderSubmittedRef.current = true;
+    try {
+      const orderResp = await submitOrder({
+        location: 'HOLY',
+        paymentIntentId: checkoutId,
+        paymentProvider: 'SUMUP',
+        paymentMethod: 'WEB',
+        paymentAmount: { tip: 0, total },
+        items: orderItemsForBackend,
+        pickupName: state.pickupName,
+        isTakeaway: state.isTakeaway,
+      });
+      state.setActiveOrder({
+        orderId: orderResp.id,
+        txId: orderResp.txId,
+        pickupName: state.pickupName,
+        total,
+      });
+      return true;
+    } catch (err) {
+      orderSubmittedRef.current = false; // erlaubt erneuten Versuch
+      state.setErrorMessage(err.message || 'Bestellung konnte nicht angelegt werden.');
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (!canMountWidget || widgetMountedRef.current || !cardContainerRef.current) return;
+    if (!checkoutId) return;
+
+    let cancelled = false;
+    loadSumupScript()
+      .then((SumUpCard) => {
+        if (cancelled || !cardContainerRef.current) return;
+        widgetMountedRef.current = true;
+        SumUpCard.mount({
+          id: cardContainerRef.current.id,
+          checkoutId,
+          showSubmitButton: true,
+          onResponse: async (type, body) => {
+            // type: 'sent' | 'invalid' | 'auth-screen' | 'error' | 'success' | 'fail'
+            if (type === 'sent') {
+              await ensureOrderSubmitted();
+            } else if (type === 'success') {
+              const ok = await ensureOrderSubmitted();
+              if (ok) navigate('/payment-complete');
+            } else if (type === 'error' || type === 'fail') {
+              state.setErrorMessage(body?.message || 'Bezahlung fehlgeschlagen.');
+              orderSubmittedRef.current = false;
+            }
+          },
+        });
+      })
+      .catch((err) => {
+        state.setErrorMessage(err.message || 'SumUp-Widget konnte nicht geladen werden.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canMountWidget, checkoutId]);
+
+  const cardArea = canMountWidget ? (
+    <div
+      id="sumup-card-container"
+      ref={cardContainerRef}
+      style={{ minHeight: 200 }}
+    />
+  ) : (
+    <div className="text-sm" style={{ color: 'var(--holi-ink-soft)' }}>
+      Bitte zuerst Abhol-Namen festlegen und AGB / Datenschutz bestätigen.
+      Dann erscheint hier die Zahlungsmaske.
+    </div>
+  );
+
+  // SumUp-Widget hat seinen eigenen Submit-Button – wir zeigen statt einer
+  // separaten Pay-Button-Schaltfläche einen passiven Hinweis.
+  const payButton = (
+    <div
+      className="w-full text-center text-sm font-semibold rounded-2xl px-4 py-4"
+      style={{
+        background: 'rgba(255,255,255,0.7)',
+        color: 'var(--holi-ink-soft)',
+      }}
+    >
+      {state.submitting ? 'Wird verarbeitet…' : `Zahlung über das Widget oben · ${formatEuro(total)}`}
+    </div>
+  );
+
+  return (
+    <CheckoutLayout
+      state={state}
+      cardArea={cardArea}
+      payButton={payButton}
+      total={total}
+      providerNote="Sichere Zahlung über SumUp — Karte"
+    />
   );
 };
