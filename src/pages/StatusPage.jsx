@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 import { usePickupStore } from '../stores/usePickupStore';
 import { useGetOrderStatus } from '../hooks/useGetOrderStatus';
@@ -11,7 +11,23 @@ import { StatusTimeline, statusToStepIndex } from '../components/StatusTimeline'
 
 export default function StatusPage() {
   const navigate = useNavigate();
-  const txId = usePickupStore((s) => s.txId);
+  const location = useLocation();
+  const storeTxId = usePickupStore((s) => s.txId);
+  const setActiveOrder = usePickupStore((s) => s.setActiveOrder);
+  // Wenn der Checkout uns die txId direkt mitgibt (z.B. bei SumUp-Erfolg
+  // ohne /payment-complete-Zwischenseite), bevorzugen wir die – damit
+  // kein Race mit der Store-Persistierung entsteht.
+  const navTxId = location.state?.txId || null;
+  const txId = storeTxId || navTxId;
+
+  // Wenn wir die txId aus dem Navigations-State haben, aber der Store
+  // sie noch nicht kennt: nachreichen.
+  useEffect(() => {
+    if (navTxId && !storeTxId) {
+      setActiveOrder({ txId: navTxId });
+    }
+  }, [navTxId, storeTxId, setActiveOrder]);
+
   const pickupName = usePickupStore((s) => s.pickupName);
   const clearActiveOrder = usePickupStore((s) => s.clearActiveOrder);
 
@@ -31,10 +47,17 @@ export default function StatusPage() {
     prevStatus.current = data.status;
   }, [data?.status]);
 
-  // Kein aktiver Order-Token? Zurück zum Menü.
+  // Kein aktiver Order-Token? Zurück zum Menü. Kurze Karenz, damit
+  // ein soeben erfolgter setActiveOrder noch durchpropagieren kann.
   useEffect(() => {
-    if (!txId) navigate('/', { replace: true });
-  }, [txId, navigate]);
+    if (txId) return;
+    const t = setTimeout(() => {
+      const latest =
+        usePickupStore.getState().txId || location.state?.txId || null;
+      if (!latest) navigate('/', { replace: true });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [txId, navigate, location.state]);
 
   const handleNewOrder = () => {
     clearActiveOrder();

@@ -617,9 +617,12 @@ const CheckoutFormSumup = ({ intentData, orderItemsForBackend, total }) => {
                 // SumUp-Widget hat den Erfolg bereits bestätigt – die
                 // Stripe-Zwischenseite /payment-complete würde mit dem
                 // SumUp-Redirect (kein client_secret in der URL) hängen
-                // bleiben. Direkt zum Status-Screen.
+                // bleiben. Direkt zum Status-Screen mit explizitem txId
+                // (nicht nur über den Store), damit kein Race entsteht
+                // falls die Store-Persistierung minimal verzögert.
+                const txId = usePickupStore.getState().txId;
                 useCartStore.getState().clear();
-                navigate('/status', { replace: true });
+                navigate('/status', { replace: true, state: { txId } });
               }
             } else if (type === 'error' || type === 'fail') {
               state.setErrorMessage(body?.message || 'Bezahlung fehlgeschlagen.');
